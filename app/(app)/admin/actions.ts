@@ -98,7 +98,7 @@ export async function saveTermAction(_: FormState, form: FormData): Promise<Form
     .filter(Boolean);
   await q(
     `INSERT INTO glossary_terms(slug, term, aliases, area, short_definition, definition, legal_basis, example, updated_by, updated_at)
-     VALUES ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9, now())
+     VALUES ($1,$2,$3::text::jsonb,$4,$5,$6,$7,$8,$9, now())
      ON CONFLICT (slug) DO UPDATE SET term=EXCLUDED.term, aliases=EXCLUDED.aliases, area=EXCLUDED.area,
        short_definition=EXCLUDED.short_definition, definition=EXCLUDED.definition, legal_basis=EXCLUDED.legal_basis,
        example=EXCLUDED.example, updated_by=EXCLUDED.updated_by, updated_at=now()`,

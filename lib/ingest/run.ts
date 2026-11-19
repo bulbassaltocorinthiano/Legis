@@ -51,7 +51,7 @@ async function saveNodes(db: Db, normId: number, parsed: ParsedNorm) {
     const tuples = chunk.map((n, j) => {
       const b = j * 11;
       values.push(normId, n.ord, n.kind, n.label, n.text, n.heading, JSON.stringify(n.notes), n.articleKey, n.anchor, n.revoked, n.level);
-      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7}::jsonb,$${b + 8},$${b + 9},$${b + 10},$${b + 11})`;
+      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7}::text::jsonb,$${b + 8},$${b + 9},$${b + 10},$${b + 11})`;
     });
     await db.query(
       `INSERT INTO norm_nodes(norm_id, ord, kind, label, text, heading, notes, article_key, anchor, revoked, level) VALUES ${tuples.join(",")}`,
