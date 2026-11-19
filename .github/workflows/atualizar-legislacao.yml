@@ -24,6 +24,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Conferir segredo DATABASE_URL
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Segredo DATABASE_URL não encontrado. Cadastre em Settings → Secrets and variables → Actions → New repository secret."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - run: npm ci
       - name: Legislação
         if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *'
