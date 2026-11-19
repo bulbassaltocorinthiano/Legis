@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/", label: "Legislação", match: (p: string) => p === "/" || p.startsWith("/lei") || p.startsWith("/area") },
   { href: "/doutrina", label: "Doutrina", match: (p: string) => p.startsWith("/doutrina") },
+  { href: "/notas", label: "Notas", match: (p: string) => p.startsWith("/notas") },
 ];
 
 export function NavLinks({ isAdmin }: { isAdmin: boolean }) {

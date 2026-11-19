@@ -221,3 +221,41 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .pomo-glow, .pomo-fade, .pomo-pop { animation: none; }
 }
+
+/* Grade do leitor: sumário | texto | legenda. O sumário pode ser recolhido. */
+@media (min-width: 1024px) {
+  .leitor-grid { grid-template-columns: 280px minmax(0, 1fr); transition: grid-template-columns 0.25s ease; }
+  :root[data-toc="fechado"] .leitor-grid { grid-template-columns: 44px minmax(0, 1fr); }
+}
+@media (min-width: 1280px) {
+  .leitor-grid { grid-template-columns: 300px minmax(0, 1fr) 200px; }
+  :root[data-toc="fechado"] .leitor-grid { grid-template-columns: 44px minmax(0, 1fr) 200px; }
+}
+:root[data-toc="fechado"] .toc-aberto { display: none; }
+:root:not([data-toc="fechado"]) .toc-fechado { display: none; }
+
+/* Marca-texto pessoal (CSS Custom Highlight API) */
+::highlight(hl-amarelo) { background-color: rgb(255 212 59 / 0.55); }
+::highlight(hl-verde) { background-color: rgb(105 219 124 / 0.45); }
+::highlight(hl-rosa) { background-color: rgb(247 131 172 / 0.45); }
+::highlight(hl-azul) { background-color: rgb(116 192 252 / 0.45); }
+.dark ::highlight(hl-amarelo) { background-color: rgb(255 212 59 / 0.35); color: #fff7d6; }
+.dark ::highlight(hl-verde) { background-color: rgb(105 219 124 / 0.3); color: #e6ffec; }
+.dark ::highlight(hl-rosa) { background-color: rgb(247 131 172 / 0.32); color: #ffe3ee; }
+.dark ::highlight(hl-azul) { background-color: rgb(116 192 252 / 0.32); color: #e3f3ff; }
+.lei[data-tool="marker"] [data-hl] {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23ffd43b' stroke='%231b1a17' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='m14.5 4.5 5 5L11 18l-5-5z'/%3E%3Cpath d='m6 13-2.5 6.5L10 17z'/%3E%3C/svg%3E") 3 21, text;
+}
+.lei[data-tool="eraser"] [data-hl] {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23ffc9c9' stroke='%231b1a17' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='m7 21-4.3-4.3a1.5 1.5 0 0 1 0-2.1L13.6 3.7a1.5 1.5 0 0 1 2.1 0l4.6 4.6a1.5 1.5 0 0 1 0 2.1L10.5 21z'/%3E%3C/svg%3E") 4 20, pointer;
+}
+.lei[data-tool="note"] p[id] { cursor: copy; }
+.lei[data-tool="note"] p[id]:hover { background: color-mix(in srgb, var(--gold) 12%, transparent); border-radius: 10px; }
+.lei[data-tool="marker"] .termo,
+.lei[data-tool="eraser"] .termo { cursor: inherit; }
+@media print {
+  .no-print { display: none !important; }
+}
+@media (min-width: 1024px) {
+  :root[data-toc="fechado"] .leitor-main { width: 100%; max-width: calc(72ch + 2rem); margin-inline: auto; }
+}

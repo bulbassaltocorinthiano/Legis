@@ -41,6 +41,9 @@ export function UserMenu({ name, isAdmin }: { name: string; isAdmin: boolean }) 
             <MenuLink href="/" onClick={() => setOpen(false)}>Legislação</MenuLink>
             <MenuLink href="/doutrina" onClick={() => setOpen(false)}>Doutrina</MenuLink>
           </div>
+          <div className="border-t border-line pt-1 mt-1">
+            <MenuLink href="/notas" onClick={() => setOpen(false)}>Minhas notas e marcações</MenuLink>
+          </div>
           {isAdmin && (
             <div className="border-t border-line pt-1 mt-1">
               <MenuLink href="/admin/cobertura" onClick={() => setOpen(false)}>Cobertura e atualizações</MenuLink>

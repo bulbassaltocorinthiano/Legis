@@ -17,7 +17,7 @@ export const viewport: Viewport = {
 };
 
 // Aplica tema e preferências de leitura antes da pintura, sem "piscar".
-const prefsScript = `try{var p=JSON.parse(localStorage.getItem('legis:prefs')||'{}');var d=p.theme?p.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');if(p.size)document.documentElement.style.setProperty('--law-size',p.size+'rem');}catch(e){}`;
+const prefsScript = `try{var p=JSON.parse(localStorage.getItem('legis:prefs')||'{}');var d=p.theme?p.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');if(p.size)document.documentElement.style.setProperty('--law-size',p.size+'rem');if(localStorage.getItem('legis:toc')==='fechado')document.documentElement.dataset.toc='fechado';}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

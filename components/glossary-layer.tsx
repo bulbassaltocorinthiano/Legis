@@ -28,7 +28,6 @@ interface Pop {
  */
 export function GlossaryLayer() {
   const [pop, setPop] = useState<Pop | null>(null);
-  const [ask, setAsk] = useState<{ x: number; y: number; text: string } | null>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const cache = useRef(new Map<string, TermDto[]>());
 
@@ -45,7 +44,6 @@ export function GlossaryLayer() {
       const above = rect.bottom + 320 > window.innerHeight && rect.top > 340;
       const x = Math.min(Math.max(12, rect.left + rect.width / 2 - 180), window.innerWidth - 372);
       const y = above ? rect.top + window.scrollY - 8 : rect.bottom + window.scrollY + 8;
-      setAsk(null);
       setPop({ x, y, above, query: opts.query, slug: opts.slug, loading: true, results: [] });
       const results = opts.slug
         ? await fetchTerms(`s:${opts.slug}`, `/api/doutrina?slug=${encodeURIComponent(opts.slug)}`)
@@ -58,7 +56,8 @@ export function GlossaryLayer() {
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       const t = (e.target as HTMLElement).closest<HTMLElement>("[data-term]");
-      if (t && !document.getElementById("lei")?.classList.contains("sem-termos")) {
+      const leiEl = document.getElementById("lei");
+      if (t && !leiEl?.classList.contains("sem-termos") && (leiEl?.dataset.tool ?? "off") === "off") {
         e.preventDefault();
         openAt(t.getBoundingClientRect(), { slug: t.dataset.term, query: t.textContent ?? "" });
         return;
@@ -68,60 +67,28 @@ export function GlossaryLayer() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setPop(null);
-        setAsk(null);
-      }
+        }
       if (e.key === "Enter") {
         const t = (e.target as HTMLElement).closest?.<HTMLElement>("[data-term]");
         if (t) openAt(t.getBoundingClientRect(), { slug: t.dataset.term, query: t.textContent ?? "" });
       }
     };
-    const onSelect = () => {
-      const sel = window.getSelection();
-      const text = sel?.toString().replace(/\s+/g, " ").trim() ?? "";
-      if (!sel || sel.isCollapsed || text.length < 3 || text.length > 60 || text.split(" ").length > 5) {
-        setAsk(null);
-        return;
-      }
-      const lei = document.getElementById("lei");
-      if (!lei || !lei.contains(sel.anchorNode)) return;
-      const rect = sel.getRangeAt(0).getBoundingClientRect();
-      setAsk({ x: rect.left + rect.width / 2 + window.scrollX, y: rect.top + window.scrollY - 8, text: text.replace(/[.,;:()"]+$/g, "").replace(/^[("]+/, "") });
-    };
-    let selTimer: ReturnType<typeof setTimeout>;
-    const onSelChange = () => {
-      clearTimeout(selTimer);
-      selTimer = setTimeout(onSelect, 250);
+    const onConsult = (e: Event) => {
+      const d = (e as CustomEvent<{ text: string; rect: DOMRect }>).detail;
+      if (d?.text) openAt(d.rect, { query: d.text });
     };
     document.addEventListener("click", onClick);
     document.addEventListener("keydown", onKey);
-    document.addEventListener("selectionchange", onSelChange);
+    window.addEventListener("legis:consultar", onConsult);
     return () => {
       document.removeEventListener("click", onClick);
       document.removeEventListener("keydown", onKey);
-      document.removeEventListener("selectionchange", onSelChange);
+      window.removeEventListener("legis:consultar", onConsult);
     };
   }, [openAt]);
 
   return (
     <>
-      {ask && (
-        <button
-          data-ask
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={(e) => {
-            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            openAt(new DOMRect(r.left, r.top + 36, r.width, 0), { query: ask.text });
-          }}
-          style={{ left: ask.x, top: ask.y }}
-          className="absolute z-50 -translate-x-1/2 -translate-y-full rounded-full bg-ink text-bg text-xs font-medium px-3 py-2 shadow-lg flex items-center gap-1.5 font-sans"
-        >
-          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path d="M4 19.5V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2Z" />
-            <path d="M8 7h7M8 11h5" />
-          </svg>
-          Consultar significado
-        </button>
-      )}
       {pop && (
         <div
           ref={popRef}

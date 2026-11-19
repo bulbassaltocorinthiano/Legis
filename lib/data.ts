@@ -247,3 +247,53 @@ export async function getHomeStats() {
             (SELECT max(checked_at)::text FROM norms) conferido`,
   );
 }
+
+// ---- Marcações e notas pessoais (sempre filtradas pelo usuário logado) ----
+export interface Highlight {
+  id: number;
+  anchor: string;
+  start_off: number;
+  end_off: number;
+  color: string;
+  quote: string;
+}
+export interface Note {
+  id: number;
+  anchor: string;
+  quote: string | null;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getUserHighlights(userId: number, normId: number) {
+  return q<Highlight>(
+    `SELECT id::int, anchor, start_off, end_off, color, quote FROM user_highlights WHERE user_id=$1 AND norm_id=$2 ORDER BY id`,
+    [userId, normId],
+  );
+}
+
+export async function getUserNotes(userId: number, normId: number) {
+  return q<Note>(
+    `SELECT id::int, anchor, quote, body, created_at::text, updated_at::text FROM user_notes WHERE user_id=$1 AND norm_id=$2 ORDER BY created_at`,
+    [userId, normId],
+  );
+}
+
+export async function getAllUserNotes(userId: number) {
+  await ensureReady();
+  const notes = await q<Note & { slug: string; title: string; nickname: string | null; label: string | null }>(
+    `SELECT un.id::int, un.anchor, un.quote, un.body, un.created_at::text, un.updated_at::text, n.slug, n.title, n.nickname,
+            (SELECT nn.label FROM norm_nodes nn WHERE nn.norm_id=un.norm_id AND nn.anchor=un.anchor LIMIT 1) AS label
+       FROM user_notes un JOIN norms n ON n.id=un.norm_id
+      WHERE un.user_id=$1 ORDER BY un.updated_at DESC`,
+    [userId],
+  );
+  const marks = await q<{ slug: string; title: string; nickname: string | null; n: number; last: string }>(
+    `SELECT n.slug, n.title, n.nickname, count(*)::int n, max(h.created_at)::text last
+       FROM user_highlights h JOIN norms n ON n.id=h.norm_id WHERE h.user_id=$1
+      GROUP BY n.id ORDER BY max(h.created_at) DESC`,
+    [userId],
+  );
+  return { notes, marks };
+}

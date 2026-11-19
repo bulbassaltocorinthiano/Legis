@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Fragment } from "react";
-import { getJurisCounts, getJurisForNorm, getNodes, getNorm, getNormCategories, getTerms, type Juris, type NodeRow } from "@/lib/data";
+import { getJurisCounts, getJurisForNorm, getNodes, getNorm, getNormCategories, getTerms, getUserHighlights, getUserNotes, type Juris, type NodeRow, type Note } from "@/lib/data";
+import { requireUser } from "@/lib/auth";
+import { MarkupLayer } from "@/components/markup-layer";
+import { NoteCards } from "@/components/note-cards";
 import { buildMatcher } from "@/lib/text/terms";
 import { LawText } from "@/components/law-text";
 import { ReaderControls } from "@/components/reader-controls";
@@ -33,7 +36,17 @@ export default async function LeiPage({
   if (!norm) notFound();
   const juris = aba === "jurisprudencia";
 
-  const [nodes, cats, terms, counts] = await Promise.all([getNodes(norm.id), getNormCategories(norm.id), getTerms(), getJurisCounts(norm.id)]);
+  const me = await requireUser();
+  const [nodes, cats, terms, counts, marks, notes] = await Promise.all([
+    getNodes(norm.id),
+    getNormCategories(norm.id),
+    getTerms(),
+    getJurisCounts(norm.id),
+    getUserHighlights(me.id, norm.id),
+    getUserNotes(me.id, norm.id),
+  ]);
+  const notesBy = new Map<string, Note[]>();
+  for (const n of notes) notesBy.set(n.anchor, [...(notesBy.get(n.anchor) ?? []), n]);
   const jurisMap = juris ? await getJurisForNorm(norm.id) : new Map<string, Juris[]>();
   const totalJuris = [...counts.values()].reduce((a, b) => a + b, 0);
   const matcher = buildMatcher(terms, cats.map((c) => c.id));
@@ -56,10 +69,10 @@ export default async function LeiPage({
     <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
       <GlossaryLayer />
       <TrackVisit slug={norm.slug} title={norm.nickname ?? norm.description} subtitle={norm.title} />
-      <div className="grid lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_200px] gap-8 xl:gap-12">
+      <div className="leitor-grid grid gap-8 xl:gap-12">
         <Toc items={toc} />
 
-        <main className="min-w-0 py-6 sm:py-10">
+        <main className="leitor-main min-w-0 py-6 sm:py-10">
           <nav className="text-sm text-muted flex flex-wrap gap-x-2">
             <Link href="/" className="hover:text-ink">
               Legislação
@@ -123,7 +136,14 @@ export default async function LeiPage({
               <article id="lei" className="lei mt-6 max-w-[72ch]">
                 {nodes.map((n, i) => {
                   if (n.kind === "artigo") seen = new Set();
-                  const el = <NodeView key={n.id} n={n} matcher={matcher} seen={seen} jurisCount={n.kind === "artigo" && n.article_key ? (counts.get(n.article_key) ?? 0) : 0} slug={norm.slug} juris={juris} />;
+                  const nodeEl = <NodeView n={n} matcher={matcher} seen={seen} jurisCount={n.kind === "artigo" && n.article_key ? (counts.get(n.article_key) ?? 0) : 0} slug={norm.slug} juris={juris} />;
+                  const myNotes = notesBy.get(n.anchor);
+                  const el = (
+                    <Fragment key={n.id}>
+                      {nodeEl}
+                      {myNotes && <NoteCards normId={norm.id} notes={myNotes} />}
+                    </Fragment>
+                  );
                   if (juris && lastOfArticle.has(i) && n.article_key) {
                     const list = jurisMap.get(n.article_key);
                     return (
@@ -136,6 +156,7 @@ export default async function LeiPage({
                   return el;
                 })}
               </article>
+              <MarkupLayer normId={norm.id} initial={marks} />
             </>
           )}
         </main>
@@ -223,7 +244,13 @@ function NodeView({
           {n.kind === "pena" ? "Pena –" : n.kind === "inciso" ? `${n.label} –` : n.label}
         </a>
       )}{" "}
-      {n.revoked && !n.text ? <span className="italic">(revogado)</span> : <LawText text={n.text} matcher={matcher} seen={seen} />}
+      {n.revoked && !n.text ? (
+        <span className="italic">(revogado)</span>
+      ) : (
+        <span data-hl={n.anchor}>
+          <LawText text={n.text} matcher={matcher} seen={seen} />
+        </span>
+      )}
       {notes}
       {jurisCount > 0 && !juris && (
         <Link

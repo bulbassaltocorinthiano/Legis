@@ -45,7 +45,7 @@ export function HeaderSearch() {
           className="w-full h-10 rounded-xl border border-line bg-surface pl-9 pr-14 text-sm outline-none focus:border-accent focus:ring-4 focus:ring-accent/15 transition placeholder:text-muted"
           enterKeyHint="search"
         />
-        <kbd className="hidden sm:block absolute right-2.5 text-[11px] text-muted border border-line rounded-md px-1.5 py-0.5 bg-surface-2">
+        <kbd className="hidden lg:block absolute right-2.5 text-[11px] text-muted border border-line rounded-md px-1.5 py-0.5 bg-surface-2">
           Ctrl K
         </kbd>
       </label>
