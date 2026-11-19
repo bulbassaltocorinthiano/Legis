@@ -1,0 +1,37 @@
+# Robô de atualização (gratuito no GitHub Actions):
+#  - a cada 6 horas confere todas as normas na fonte oficial (requisição condicional: só baixa o que mudou);
+#  - uma vez por dia atualiza a jurisprudência do STJ (temas repetitivos e acórdãos recentes).
+# Requer o segredo DATABASE_URL no repositório (Settings → Secrets and variables → Actions).
+name: Atualizar legislação
+
+on:
+  schedule:
+    - cron: "17 */6 * * *" # legislação
+    - cron: "40 7 * * *" # jurisprudência
+  workflow_dispatch:
+    inputs:
+      meses:
+        description: "Meses de acórdãos do STJ a carregar (use 6 na primeira carga)"
+        default: "6"
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Legislação
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */6 * * *'
+        run: npm run ingest -- --all
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Jurisprudência STJ
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '40 7 * * *'
+        run: npm run ingest:stj -- --months ${{ github.event.inputs.meses || '2' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

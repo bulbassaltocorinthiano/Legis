@@ -1,0 +1,1 @@
+ALTER TABLE norms ADD COLUMN IF NOT EXISTS historical boolean NOT NULL DEFAULT false;
