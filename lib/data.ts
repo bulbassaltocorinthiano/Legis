@@ -235,3 +235,15 @@ export async function getFeatured() {
     [["CF-1988", "LEI-10406-2002", "LEI-13105-2015", "DL-2848-1940", "DL-3689-1941", "LEI-5172-1966", "LEI-8078-1990", "DL-5452-1943"]],
   );
 }
+
+export async function getHomeStats() {
+  await ensureReady();
+  return one<{ normas: number; artigos: number; julgados: number; temas: number; conceitos: number; conferido: string | null }>(
+    `SELECT (SELECT count(*)::int FROM norms WHERE status='ok') normas,
+            (SELECT coalesce(sum(article_count),0)::int FROM norms WHERE status='ok') artigos,
+            (SELECT count(*)::int FROM jurisprudence) julgados,
+            (SELECT count(*)::int FROM jurisprudence WHERE kind='tema_repetitivo') temas,
+            (SELECT count(*)::int FROM glossary_terms) conceitos,
+            (SELECT max(checked_at)::text FROM norms) conferido`,
+  );
+}

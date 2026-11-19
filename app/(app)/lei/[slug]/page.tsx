@@ -9,6 +9,7 @@ import { GlossaryLayer } from "@/components/glossary-layer";
 import { Toc, type TocItem } from "@/components/toc";
 import { JurisList } from "@/components/juris-list";
 import { formatDateTime } from "@/lib/format";
+import { TrackVisit } from "@/components/recent-reads";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ export default async function LeiPage({
   return (
     <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
       <GlossaryLayer />
+      <TrackVisit slug={norm.slug} title={norm.nickname ?? norm.description} subtitle={norm.title} />
       <div className="grid lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_200px] gap-8 xl:gap-12">
         <Toc items={toc} />
 
