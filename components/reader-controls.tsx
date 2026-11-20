@@ -19,6 +19,7 @@ export function ReaderControls() {
     el.classList.toggle("sem-termos", !!prefs.hideTerms);
     el.classList.toggle("hide-notes", !!prefs.hideNotes);
     el.classList.toggle("hide-revoked", !!prefs.hideRevoked);
+    el.classList.toggle("sem-cobrados", !!prefs.hideCobrados);
   }, [prefs]);
 
   useEffect(() => {
@@ -127,6 +128,7 @@ export function ReaderControls() {
             <Toggle label="Mostrar notas de alteração" checked={!prefs.hideNotes} onChange={(v) => update({ hideNotes: v ? undefined : true })} />
             <Toggle label="Mostrar dispositivos revogados" checked={!prefs.hideRevoked} onChange={(v) => update({ hideRevoked: v ? undefined : true })} />
             <Toggle label="Sublinhar termos da doutrina" checked={!prefs.hideTerms} onChange={(v) => update({ hideTerms: v ? undefined : true })} />
+            <Toggle label="Marcar artigos mais cobrados" checked={!prefs.hideCobrados} onChange={(v) => update({ hideCobrados: v ? undefined : true })} />
           </div>
         )}
       </div>

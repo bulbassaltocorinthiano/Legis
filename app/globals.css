@@ -259,3 +259,28 @@ body {
 @media (min-width: 1024px) {
   :root[data-toc="fechado"] .leitor-main { width: 100%; max-width: calc(72ch + 2rem); margin-inline: auto; }
 }
+
+/* Artigos mais cobrados em provas: marca discreta junto ao rótulo do artigo */
+.cobrado-marca {
+  display: inline-flex;
+  vertical-align: 0.12em;
+  margin-left: 0.3em;
+  color: var(--gold);
+  opacity: 0.75;
+  transition: opacity 0.2s ease;
+}
+.cobrado-marca svg {
+  width: 0.72em;
+  height: 0.72em;
+  fill: currentColor;
+}
+.lei a.cobrado-marca:hover,
+.lei a.cobrado-marca:focus-visible {
+  opacity: 1;
+}
+.dark .cobrado-marca {
+  opacity: 0.6;
+}
+.lei.sem-cobrados .cobrado-marca {
+  display: none;
+}
