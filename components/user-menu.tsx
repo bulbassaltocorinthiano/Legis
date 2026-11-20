@@ -44,6 +44,7 @@ export function UserMenu({ name, isAdmin }: { name: string; isAdmin: boolean }) 
           </div>
           <div className="border-t border-line pt-1 mt-1">
             <MenuLink href="/notas" onClick={() => setOpen(false)}>Minhas notas e marcações</MenuLink>
+            <MenuLink href="/estatisticas" onClick={() => setOpen(false)}>Estatísticas de leitura</MenuLink>
           </div>
           {isAdmin && (
             <div className="border-t border-line pt-1 mt-1">

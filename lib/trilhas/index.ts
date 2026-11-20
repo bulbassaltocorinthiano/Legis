@@ -2,7 +2,8 @@ import "server-only";
 import { getDb, one, q } from "../db";
 import { ensureReady } from "../bootstrap";
 import { getNodes, type NodeRow } from "../data";
-import { countWords, PACES, planTrail, streaks, TZ, type Pace, type PlanArticle, type Segment } from "./plan";
+import { countWords, PACES, planTrail, streaks, TZ, type DayKind, type Pace, type PlanArticle, type Segment } from "./plan";
+import { buildQuiz, gradeQuiz, type Question, type QuizSource } from "./quiz";
 
 export { TZ };
 const BLOCK_KINDS = new Set(["parte", "livro", "titulo", "subtitulo", "capitulo"]);
@@ -15,6 +16,7 @@ export interface Trail {
   words_per_minute: number;
   pace: Pace;
   review_every: number;
+  weekly_quiz: boolean;
   status: "ativa" | "concluida";
   created_at: string;
   finished_at: string | null;
@@ -29,7 +31,7 @@ export interface Trail {
 export interface TrailDay {
   id: number;
   day_no: number;
-  kind: "leitura" | "revisao";
+  kind: DayKind;
   segments: (Segment & { slug?: string; norm_title?: string })[];
   review_of: number[];
   words: number;
@@ -79,7 +81,7 @@ export function articlesFromNodes(nodes: NodeRow[]): PlanArticle[] {
 
 // ---------- criação ----------
 
-export async function createTrail(userId: number, input: { title: string; minutes: number; pace: Pace; reviewEvery: number; normIds: number[] }) {
+export async function createTrail(userId: number, input: { title: string; minutes: number; pace: Pace; reviewEvery: number; weeklyQuiz: boolean; normIds: number[] }) {
   await ensureReady();
   const wpm = PACES[input.pace]?.wpm ?? PACES.normal.wpm;
   const valid = await q<{ id: number }>(`SELECT id FROM norms WHERE id = ANY($1::int[]) AND status='ok'`, [input.normIds]);
@@ -89,14 +91,14 @@ export async function createTrail(userId: number, input: { title: string; minute
 
   const planNorms = [];
   for (const id of ids) planNorms.push({ normId: id, articles: articlesFromNodes(await getNodes(id)) });
-  const days = planTrail(planNorms, input.minutes, wpm, input.reviewEvery);
+  const days = planTrail(planNorms, input.minutes, wpm, input.reviewEvery, input.weeklyQuiz);
   if (!days.length) throw new Error("Não há artigos vigentes para ler nas normas escolhidas.");
 
   const db = await getDb();
   return db.transaction(async (tx) => {
     const [t] = await tx.query<{ id: number }>(
-      `INSERT INTO reading_trails(user_id, title, minutes_per_day, words_per_minute, pace, review_every) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [userId, input.title, input.minutes, wpm, input.pace, input.reviewEvery],
+      `INSERT INTO reading_trails(user_id, title, minutes_per_day, words_per_minute, pace, review_every, weekly_quiz) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [userId, input.title, input.minutes, wpm, input.pace, input.reviewEvery, input.weeklyQuiz],
     );
     for (let i = 0; i < ids.length; i++) await tx.query(`INSERT INTO trail_norms(trail_id, norm_id, position) VALUES ($1,$2,$3)`, [t.id, ids[i], i]);
     const BATCH = 200;
@@ -117,7 +119,7 @@ export async function createTrail(userId: number, input: { title: string; minute
 // ---------- leitura ----------
 
 const TRAIL_SELECT = `
-  SELECT t.id, t.title, t.minutes_per_day, t.words_per_minute, t.pace, t.review_every, t.status, t.created_at::text, t.finished_at::text,
+  SELECT t.id, t.title, t.minutes_per_day, t.words_per_minute, t.pace, t.review_every, t.weekly_quiz, t.status, t.created_at::text, t.finished_at::text,
          count(d.id)::int AS total_days,
          count(d.completed_at)::int AS done_days,
          coalesce(sum(d.words), 0)::int AS total_words,
@@ -320,6 +322,8 @@ export interface RankRow {
   last_read: string | null;
   active_trails: number;
   done_trails: number;
+  site_seconds: number;
+  site_articles: number;
   streak: number;
 }
 
@@ -331,7 +335,11 @@ export async function getRanking(sinceDays: number | null): Promise<RankRow[]> {
             coalesce(sum(l.words),0)::int words, coalesce(sum(l.articles),0)::int articles, count(l.id)::int days,
             coalesce(sum(l.minutes),0)::int minutes, max(l.read_at)::text last_read,
             (SELECT count(*)::int FROM reading_trails t WHERE t.user_id = u.id AND t.status = 'ativa') active_trails,
-            (SELECT count(*)::int FROM reading_trails t WHERE t.user_id = u.id AND t.status = 'concluida') done_trails
+            (SELECT count(*)::int FROM reading_trails t WHERE t.user_id = u.id AND t.status = 'concluida') done_trails,
+            (SELECT coalesce(sum(rt.seconds),0)::int FROM reading_time rt WHERE rt.user_id = u.id
+               AND ($1::int IS NULL OR rt.day > (now() AT TIME ZONE '${TZ}')::date - $1::int)) site_seconds,
+            (SELECT count(*)::int FROM article_reads ar WHERE ar.user_id = u.id
+               AND ($1::int IS NULL OR ar.last_at >= now() - ($1::int * interval '1 day'))) site_articles
        FROM users u LEFT JOIN reading_log l ON l.user_id = u.id ${cond}
       WHERE u.active
       GROUP BY u.id
@@ -344,4 +352,57 @@ export async function getRanking(sinceDays: number | null): Promise<RankRow[]> {
   const by = new Map<number, string[]>();
   for (const r of dates) by.set(r.user_id, [...(by.get(r.user_id) ?? []), r.d]);
   return rows.map((r) => ({ ...r, streak: streaks(by.get(r.id) ?? []).current }));
+}
+
+// ---------- questionário semanal ----------
+
+/** Monta as questões do dia de questionário a partir do texto lido nos dias que ele cobre. */
+export async function getQuizQuestions(day: TrailDay, days: TrailDay[]): Promise<Question[]> {
+  const covered = days.filter((d) => day.review_of.includes(d.day_no) && d.kind === "leitura");
+  const byNorm = new Map<number, QuizSource>();
+  for (const d of covered) {
+    for (const { segment, nodes } of await getDayContent(d)) {
+      const src = byNorm.get(segment.norm_id) ?? { slug: segment.slug ?? "", normTitle: segment.norm_title ?? "", nodes: [] };
+      src.nodes.push(...nodes);
+      byNorm.set(segment.norm_id, src);
+    }
+  }
+  return buildQuiz([...byNorm.values()], day.id, 10);
+}
+
+export async function getQuizAttempts(userId: number, dayId: number) {
+  return q<{ id: number; score: number; total: number; created_at: string }>(
+    `SELECT id::int, score, total, created_at::text FROM quiz_attempts WHERE user_id = $1 AND trail_day_id = $2 ORDER BY created_at DESC`,
+    [userId, dayId],
+  );
+}
+
+export async function submitQuiz(userId: number, trailId: number, dayNo: number, answers: number[]) {
+  const trail = await getTrail(userId, trailId);
+  if (!trail) return null;
+  const days = await getTrailDays(trailId);
+  const day = days.find((d) => d.day_no === dayNo && d.kind === "questionario");
+  if (!day) return null;
+  const questions = await getQuizQuestions(day, days);
+  const graded = gradeQuiz(questions, answers);
+  await q(`INSERT INTO quiz_attempts(user_id, trail_day_id, score, total, answers) VALUES ($1,$2,$3,$4,$5::text::jsonb)`, [
+    userId,
+    day.id,
+    graded.score,
+    graded.total,
+    JSON.stringify(answers.slice(0, 50)),
+  ]);
+  const celebration = day.completed_at ? null : await completeDay(userId, trailId, dayNo);
+  return {
+    ...graded,
+    review: questions.map((qq, i) => ({ correctText: qq.options[qq.answer], chosen: graded.results[i].chosen, answer: qq.answer, ref: qq.ref })),
+    celebration,
+  };
+}
+
+export async function getQuizSummary(userId: number) {
+  return one<{ attempts: number; score: number; total: number }>(
+    `SELECT count(*)::int attempts, coalesce(sum(score),0)::int score, coalesce(sum(total),0)::int total FROM quiz_attempts WHERE user_id = $1`,
+    [userId],
+  );
 }

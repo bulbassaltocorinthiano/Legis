@@ -49,6 +49,7 @@ export default async function TrilhaPage({ params, searchParams }: { params: Pro
           <p className="text-xs uppercase tracking-wider text-white/60">
             {trail.minutes_per_day} min/dia · ritmo {PACES[trail.pace]?.label.toLowerCase() ?? trail.pace}
             {trail.review_every ? ` · revisão a cada ${trail.review_every} dias` : ""}
+            {trail.weekly_quiz ? " · questionário semanal" : ""}
           </p>
           <h1 className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight">{trail.title}</h1>
           <p className="mt-1 text-sm text-white/70">{trail.norms}</p>
@@ -119,6 +120,7 @@ export default async function TrilhaPage({ params, searchParams }: { params: Pro
 function DayItem({ d, trailId, current, milestone }: { d: TrailDay; trailId: number; current: boolean; milestone?: number }) {
   const done = !!d.completed_at;
   const review = d.kind === "revisao";
+  const quiz = d.kind === "questionario";
   return (
     <>
       <li className="relative">
@@ -133,12 +135,14 @@ function DayItem({ d, trailId, current, milestone }: { d: TrailDay; trailId: num
                 ? "bg-ok text-white"
                 : current
                   ? "bg-accent text-accent-ink trilha-atual"
-                  : review
+                  : quiz
+                    ? "bg-[color-mix(in_srgb,#7c3aed_14%,transparent)] text-[#7c3aed] border border-dashed border-[#7c3aed]/60"
+                    : review
                     ? "bg-[var(--prazo-bg)] text-[var(--warn)] border border-dashed border-[var(--gold)]"
                     : "bg-surface border-2 border-line text-ink-2 group-hover:border-accent/60"
             }`}
           >
-            {done ? "✓" : review ? "↺" : d.day_no}
+            {done ? "✓" : quiz ? "?" : review ? "↺" : d.day_no}
           </span>
           <span
             className={`min-w-0 flex-1 rounded-2xl border px-4 py-3 transition ${
@@ -148,13 +152,15 @@ function DayItem({ d, trailId, current, milestone }: { d: TrailDay; trailId: num
             <span className="flex items-center justify-between gap-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted">
                 Dia {d.day_no}
-                {review ? " · revisão" : ""}
+                {review ? " · revisão" : quiz ? " · questionário" : ""}
                 {current ? <span className="ml-2 normal-case tracking-normal text-accent">← você está aqui</span> : null}
               </span>
               <span className="text-xs text-muted tabular-nums shrink-0">≈ {d.est_minutes} min</span>
             </span>
             <span className="mt-1 block text-sm leading-snug">
-              {review
+              {quiz
+                ? `Questionário da semana: 10 questões dos dias ${d.review_of[0]} a ${d.review_of[d.review_of.length - 1]}`
+                : review
                 ? `Revisão dos dias ${d.review_of[0]} a ${d.review_of[d.review_of.length - 1]}`
                 : d.segments.map((s, i) => (
                     <span key={i} className="block">
@@ -162,7 +168,7 @@ function DayItem({ d, trailId, current, milestone }: { d: TrailDay; trailId: num
                     </span>
                   ))}
             </span>
-            {!review && <span className="mt-0.5 block text-xs text-muted">{d.articles} {d.articles === 1 ? "artigo" : "artigos"}</span>}
+            {!review && !quiz && <span className="mt-0.5 block text-xs text-muted">{d.articles} {d.articles === 1 ? "artigo" : "artigos"}</span>}
           </span>
         </Link>
       </li>

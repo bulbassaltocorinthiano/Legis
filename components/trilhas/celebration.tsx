@@ -4,13 +4,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { completeDayAction, uncompleteDayAction } from "@/app/(app)/trilhas/actions";
 import type { Celebration } from "@/lib/trilhas";
+import type { DayKind } from "@/lib/trilhas/plan";
 import { FRASES_CONCLUSAO, pick } from "@/lib/trilhas/frases";
 import "./trilhas.css";
 
 const nf = new Intl.NumberFormat("pt-BR");
 
 /** Botão "Concluí a leitura" + pop-up de comemoração com confete. */
-export function CompleteDay({ trailId, dayNo, done, kind }: { trailId: number; dayNo: number; done: boolean; kind: "leitura" | "revisao" }) {
+export function CompleteDay({ trailId, dayNo, done, kind }: { trailId: number; dayNo: number; done: boolean; kind: DayKind }) {
   const [cel, setCel] = useState<Celebration | null>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
@@ -19,7 +20,7 @@ export function CompleteDay({ trailId, dayNo, done, kind }: { trailId: number; d
     return (
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
         <p className="inline-flex items-center gap-2 h-12 px-5 rounded-2xl bg-ok/10 text-ok font-medium">
-          <Check /> {kind === "revisao" ? "Revisão concluída" : "Leitura concluída"}
+          <Check /> {kind === "revisao" ? "Revisão concluída" : kind === "questionario" ? "Questionário concluído" : "Leitura concluída"}
         </p>
         <button
           disabled={pending}
@@ -46,7 +47,7 @@ export function CompleteDay({ trailId, dayNo, done, kind }: { trailId: number; d
           className="group relative h-14 px-8 rounded-2xl bg-accent text-accent-ink text-base font-semibold shadow-[0_10px_30px_-10px_var(--accent)] hover:-translate-y-0.5 active:translate-y-0 transition disabled:opacity-60"
         >
           <span className="inline-flex items-center gap-2">
-            <Check /> {pending ? "Registrando…" : kind === "revisao" ? "Concluí a revisão" : "Concluí a leitura de hoje"}
+            <Check /> {pending ? "Registrando…" : kind === "revisao" ? "Concluí a revisão" : kind === "questionario" ? "Marcar como concluído" : "Concluí a leitura de hoje"}
           </span>
         </button>
       </div>
@@ -55,18 +56,27 @@ export function CompleteDay({ trailId, dayNo, done, kind }: { trailId: number; d
   );
 }
 
-function CelebrationModal({ cel, trailId, onClose }: { cel: Celebration; trailId: number; onClose: () => void }) {
+export function CelebrationModal({ cel, trailId, onClose, quiz }: { cel: Celebration; trailId: number; onClose: () => void; quiz?: { score: number; total: number } }) {
   const title = cel.trailDone
     ? "Trilha concluída!"
+    : quiz
+      ? `Questionário: ${quiz.score}/${quiz.total}`
     : cel.milestone
       ? `${cel.milestone}% da trilha!`
       : cel.streak >= 2
         ? `${cel.streak} dias seguidos!`
         : `Dia ${cel.dayNo} concluído!`;
-  const emoji = cel.trailDone ? "🎓" : cel.milestone ? "🚀" : cel.streak >= 2 ? "🔥" : "🎉";
+  const emoji = cel.trailDone ? "🎓" : quiz ? (quiz.score / Math.max(1, quiz.total) >= 0.7 ? "🎯" : "📝") : cel.milestone ? "🚀" : cel.streak >= 2 ? "🔥" : "🎉";
+  const qp = quiz ? quiz.score / Math.max(1, quiz.total) : 0;
   const phrase = cel.trailDone
     ? "Você leu tudo o que se propôs. Isso é disciplina de aprovado. Que tal começar a próxima trilha?"
-    : pick(FRASES_CONCLUSAO, cel.dayNo + cel.streak);
+    : quiz
+      ? qp >= 0.8
+        ? "Excelente! A letra da lei está fixada. Siga para a próxima semana."
+        : qp >= 0.5
+          ? "Bom trabalho! Confira as correções e releia os artigos que errou."
+          : "Errar no treino é o que evita errar na prova. Revise as correções e refaça quando quiser."
+      : pick(FRASES_CONCLUSAO, cel.dayNo + cel.streak);
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -96,8 +106,17 @@ function CelebrationModal({ cel, trailId, onClose }: { cel: Celebration; trailId
         </div>
 
         <div className="mt-5 grid grid-cols-3 gap-2 text-sm">
-          <Mini v={nf.format(cel.articles)} l="artigos hoje" />
-          <Mini v={nf.format(cel.words)} l="palavras" />
+          {quiz ? (
+            <>
+              <Mini v={`${quiz.score}/${quiz.total}`} l="acertos" />
+              <Mini v={`${Math.round((quiz.score / Math.max(1, quiz.total)) * 100)}%`} l="aproveitamento" />
+            </>
+          ) : (
+            <>
+              <Mini v={nf.format(cel.articles)} l="artigos hoje" />
+              <Mini v={nf.format(cel.words)} l="palavras" />
+            </>
+          )}
           <Mini v={`${cel.streak} 🔥`} l={cel.streak === 1 ? "dia seguido" : "dias seguidos"} />
         </div>
 

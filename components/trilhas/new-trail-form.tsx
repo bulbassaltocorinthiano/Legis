@@ -29,6 +29,7 @@ export function NewTrailForm({ norms, preselect }: { norms: PickNorm[]; preselec
   const [minutes, setMinutes] = useState(30);
   const [pace, setPace] = useState<Pace>("normal");
   const [review, setReview] = useState(6);
+  const [quiz, setQuiz] = useState(true);
   const [filter, setFilter] = useState("");
   const [title, setTitle] = useState("");
 
@@ -45,7 +46,7 @@ export function NewTrailForm({ norms, preselect }: { norms: PickNorm[]; preselec
 
   const totalWords = selected.reduce((a, id) => a + (byId.get(id)?.words ?? 0), 0);
   const totalArts = selected.reduce((a, id) => a + (byId.get(id)?.articles ?? 0), 0);
-  const days = selected.length ? estimateDays(totalWords, minutes, PACES[pace].wpm, review) : 0;
+  const days = selected.length ? estimateDays(totalWords, minutes, PACES[pace].wpm, review, quiz) : 0;
   const end = new Date(Date.now() + days * 86400_000);
   const endLabel = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric" }).format(end);
 
@@ -67,6 +68,7 @@ export function NewTrailForm({ norms, preselect }: { norms: PickNorm[]; preselec
       <input type="hidden" name="minutes" value={minutes} />
       <input type="hidden" name="pace" value={pace} />
       <input type="hidden" name="review" value={review} />
+      <input type="hidden" name="quiz" value={quiz ? "1" : "0"} />
       <input type="hidden" name="title" value={title.trim() || autoTitle} />
 
       <div className="min-w-0 space-y-8">
@@ -162,6 +164,16 @@ export function NewTrailForm({ norms, preselect }: { norms: PickNorm[]; preselec
               ))}
             </div>
           </div>
+          <label className="mt-5 flex items-start gap-3 rounded-2xl border border-line bg-surface p-4 cursor-pointer hover:border-accent/50 transition">
+            <input type="checkbox" checked={quiz} onChange={(e) => setQuiz(e.target.checked)} className="mt-0.5 size-5 accent-[var(--accent)]" />
+            <span>
+              <span className="block text-sm font-medium">Questionário semanal</span>
+              <span className="block text-xs text-muted leading-relaxed">
+                A cada 7 dias de leitura, um teste de 10 questões sobre o que você leu: prazos, penas e “qual artigo trata disso”. As respostas saem do texto oficial e
+                cada correção leva direto ao artigo.
+              </span>
+            </span>
+          </label>
         </section>
       </div>
 

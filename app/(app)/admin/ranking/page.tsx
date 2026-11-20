@@ -58,7 +58,7 @@ export default async function RankingPage({ searchParams }: { searchParams: Prom
       )}
 
       <div className="mt-8 rounded-2xl border border-line bg-surface overflow-x-auto">
-        <table className="w-full text-sm min-w-[720px]">
+        <table className="w-full text-sm min-w-[820px]">
           <thead className="text-left text-xs uppercase tracking-wider text-muted">
             <tr className="border-b border-line">
               <th className="px-4 py-3 w-12">#</th>
@@ -69,6 +69,7 @@ export default async function RankingPage({ searchParams }: { searchParams: Prom
               <th className="px-4 py-3 text-right">Tempo</th>
               <th className="px-4 py-3 text-right">Sequência</th>
               <th className="px-4 py-3 text-right">Trilhas</th>
+              <th className="px-4 py-3 text-right" title="Tempo ativo lendo qualquer lei no site, com ou sem trilha">Tempo no site</th>
               <th className="px-4 py-3 text-right">Última leitura</th>
             </tr>
           </thead>
@@ -95,6 +96,7 @@ export default async function RankingPage({ searchParams }: { searchParams: Prom
                   {r.active_trails} ativa{r.active_trails === 1 ? "" : "s"}
                   {r.done_trails ? ` · ${r.done_trails} 🎓` : ""}
                 </td>
+                <td className="px-4 py-3 text-right tabular-nums" title={`${nf.format(r.site_articles)} artigos vistos`}>{fmtMin(Math.round(r.site_seconds / 60))}</td>
                 <td className="px-4 py-3 text-right text-muted">{r.last_read ? relativeTime(r.last_read) : "nunca"}</td>
               </tr>
             ))}
@@ -102,7 +104,7 @@ export default async function RankingPage({ searchParams }: { searchParams: Prom
         </table>
       </div>
       <p className="mt-3 text-xs text-muted">
-        A pontuação é o total de palavras de lei dos dias concluídos no período (dias de revisão não somam palavras). O tempo é estimado pelo ritmo de cada trilha.
+        A pontuação é o total de palavras de lei dos dias concluídos no período (dias de revisão não somam palavras). O tempo das trilhas é estimado pelo ritmo de cada uma; “Tempo no site” é o tempo ativo medido lendo qualquer lei.
       </p>
     </main>
   );

@@ -6,6 +6,7 @@ const LINKS = [
   { href: "/", label: "Legislação", match: (p: string) => p === "/" || p.startsWith("/lei") || p.startsWith("/area") },
   { href: "/trilhas", label: "Trilhas", match: (p: string) => p.startsWith("/trilhas") },
   { href: "/doutrina", label: "Doutrina", match: (p: string) => p.startsWith("/doutrina") },
+  { href: "/estatisticas", label: "Estatísticas", match: (p: string) => p.startsWith("/estatisticas") },
   { href: "/notas", label: "Notas", match: (p: string) => p.startsWith("/notas") },
 ];
 

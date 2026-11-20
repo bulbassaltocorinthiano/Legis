@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { getNormCategories, getTerms } from "@/lib/data";
 import { buildMatcher } from "@/lib/text/terms";
-import { getDayContent, getTrail, getTrailDays } from "@/lib/trilhas";
+import { getDayContent, getQuizAttempts, getQuizQuestions, getTrail, getTrailDays } from "@/lib/trilhas";
 import { FRASES_INICIO, pick } from "@/lib/trilhas/frases";
 import { rangeLabel } from "@/lib/trilhas/plan";
 import { GlossaryLayer } from "@/components/glossary-layer";
@@ -11,6 +11,8 @@ import { ReaderControls } from "@/components/reader-controls";
 import { DayText } from "@/components/trilhas/day-text";
 import { ReadingProgress } from "@/components/trilhas/reading-progress";
 import { Bar, CompleteDay } from "@/components/trilhas/celebration";
+import { Quiz } from "@/components/trilhas/quiz";
+import { ReadingTracker } from "@/components/reading-tracker";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Leitura do dia" };
@@ -29,17 +31,22 @@ export default async function DiaPage({ params }: { params: Promise<{ id: string
   const next = days.find((d) => d.day_no === n + 1);
   const pct = trail.total_days ? (trail.done_days / trail.total_days) * 100 : 0;
   const review = day.kind === "revisao";
+  const quiz = day.kind === "questionario";
+  const special = review || quiz;
 
-  const [parts, terms, cats] = review
+  const [parts, terms, cats] = special
     ? [[], [], []]
     : await Promise.all([getDayContent(day), getTerms(), Promise.all([...new Set(day.segments.map((s) => s.norm_id))].map(getNormCategories))]);
   const matcher = buildMatcher(terms, cats.flat().map((c) => c.id));
   const reviewed = review ? days.filter((d) => day.review_of.includes(d.day_no)) : [];
+  const questions = quiz ? (await getQuizQuestions(day, days)).map(({ answer: _a, ...rest }) => rest) : [];
+  const attempts = quiz ? await getQuizAttempts(me.id, day.id) : [];
+  const best = attempts.length ? attempts.reduce((a, b) => (b.score / b.total > a.score / a.total ? b : a)) : null;
 
   return (
     <div className="mx-auto max-w-[900px] px-4 sm:px-6 py-6 sm:py-10">
-      {!review && <GlossaryLayer />}
-      <ReadingProgress targetId="lei" />
+      {!special && <GlossaryLayer />}
+      {!special && <ReadingProgress targetId="lei" />}
 
       <nav className="flex items-center justify-between gap-3 text-sm">
         <Link href={`/trilhas/${trail.id}`} className="text-muted hover:text-ink truncate">
@@ -53,15 +60,24 @@ export default async function DiaPage({ params }: { params: Promise<{ id: string
 
       <header className="mt-6">
         <p className="text-sm font-medium text-accent">
-          Dia {day.day_no} de {trail.total_days} · ≈ {day.est_minutes} min{!review && ` · ${day.articles} ${day.articles === 1 ? "artigo" : "artigos"}`}
+          Dia {day.day_no} de {trail.total_days} · ≈ {day.est_minutes} min{!special && ` · ${day.articles} ${day.articles === 1 ? "artigo" : "artigos"}`}
         </p>
         <h1 className="mt-1 text-2xl sm:text-[2rem] font-semibold tracking-tight leading-tight">
-          {review ? "Dia de revisão" : day.segments.map((s) => `${s.norm_title} · ${rangeLabel(s)}`).join(" + ")}
+          {review ? "Dia de revisão" : quiz ? "Questionário da semana" : day.segments.map((s) => `${s.norm_title} · ${rangeLabel(s)}`).join(" + ")}
         </h1>
-        {!day.completed_at && <p className="mt-2 text-ink-2">{pick(FRASES_INICIO, day.day_no + trail.id)}</p>}
+        {quiz && (
+          <p className="mt-2 text-ink-2">
+            {questions.length} questões sobre os dias {day.review_of[0]} a {day.review_of[day.review_of.length - 1]}, tiradas do texto oficial que você leu.
+          </p>
+        )}
+        {!quiz && !day.completed_at && <p className="mt-2 text-ink-2">{pick(FRASES_INICIO, day.day_no + trail.id)}</p>}
       </header>
 
-      {review ? (
+      {quiz ? (
+        <section className="mt-8">
+          <Quiz trailId={trail.id} dayNo={day.day_no} questions={questions} best={best ? { score: best.score, total: best.total } : null} />
+        </section>
+      ) : review ? (
         <section id="lei" className="mt-8 space-y-4">
           <p className="text-ink-2 leading-relaxed max-w-[70ch]">
             Hoje o objetivo é fixar. Releia com calma os pontos que você marcou, os prazos em negrito e os artigos que geraram dúvida nos últimos dias. Abra
@@ -97,7 +113,8 @@ export default async function DiaPage({ params }: { params: Promise<{ id: string
           </div>
           <article id="lei" className="lei mt-6 max-w-[72ch]">
             {parts.map(({ segment, nodes }, i) => (
-              <section key={i} className={i > 0 ? "mt-12" : ""}>
+              <section key={i} id={`seg-${i}`} className={i > 0 ? "mt-12" : ""}>
+                <ReadingTracker normId={segment.norm_id} scopeId={`seg-${i}`} trackTime={i === 0} />
                 {parts.length > 1 && (
                   <p className="font-sans text-xs font-semibold uppercase tracking-wider text-accent mb-2">
                     {segment.norm_title} · {rangeLabel(segment)}
@@ -118,8 +135,12 @@ export default async function DiaPage({ params }: { params: Promise<{ id: string
       )}
 
       <div className="mt-14 rounded-3xl border border-line bg-surface p-6 sm:p-8 text-center">
-        <p className="text-sm text-muted mb-4">{day.completed_at ? "Você já concluiu este dia." : "Terminou? Registre e veja seu progresso."}</p>
-        <CompleteDay trailId={trail.id} dayNo={day.day_no} done={!!day.completed_at} kind={day.kind} />
+        {!(quiz && questions.length) && <p className="text-sm text-muted mb-4">{day.completed_at ? "Você já concluiu este dia." : "Terminou? Registre e veja seu progresso."}</p>}
+        {quiz && questions.length ? (
+          <p className="text-sm text-ink-2">{day.completed_at ? "Questionário concluído ✓" : "O dia é concluído quando você envia as respostas."}</p>
+        ) : (
+          <CompleteDay trailId={trail.id} dayNo={day.day_no} done={!!day.completed_at} kind={day.kind} />
+        )}
         <div className="mt-6 flex justify-between text-sm">
           {prev ? (
             <Link href={`/trilhas/${trail.id}/dia/${prev.day_no}`} className="text-muted hover:text-ink">

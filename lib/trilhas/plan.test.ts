@@ -67,3 +67,21 @@ test("sequência de dias", () => {
   assert.deepEqual(streaks(["2026-11-15", "2026-11-16", "2026-11-17", "2026-11-19"], now), { current: 1, best: 3, today: false });
   assert.equal(streaks(["2026-11-10"], now).current, 0);
 });
+
+test("questionário semanal a cada 7 dias de leitura, mais um final", () => {
+  const arts = Array.from({ length: 17 }, (_, i) => art(i + 1, 500));
+  const days = planTrail([{ normId: 1, articles: arts }], 5, 100, 0, true);
+  const quiz = days.filter((d) => d.kind === "questionario");
+  assert.equal(quiz.length, 3);
+  assert.deepEqual(quiz[0].review_of, [1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(days[7].kind, "questionario");
+  assert.equal(quiz[2].review_of!.length, 3);
+});
+
+test("revisão e questionário juntos contam só dias de leitura", () => {
+  const arts = Array.from({ length: 14 }, (_, i) => art(i + 1, 500));
+  const days = planTrail([{ normId: 1, articles: arts }], 5, 100, 6, true);
+  const q = days.filter((d) => d.kind === "questionario");
+  for (const d of q) for (const n of d.review_of!) assert.equal(days[n - 1].kind, "leitura");
+  assert.equal(q.length, 2);
+});

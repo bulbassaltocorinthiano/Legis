@@ -27,13 +27,15 @@ export interface Segment {
   words: number;
 }
 
+export type DayKind = "leitura" | "revisao" | "questionario";
+
 export interface PlannedDay {
-  kind: "leitura" | "revisao";
+  kind: DayKind;
   segments: Segment[];
   words: number;
   articles: number;
   est_minutes: number;
-  /** dias de leitura revisados (apenas em dias de revisão) */
+  /** dias de leitura cobertos (dias de revisão e de questionário) */
   review_of?: number[];
 }
 
@@ -61,7 +63,9 @@ export function countWords(s: string | null | undefined) {
  *  - um artigo nunca é partido: um artigo maior que o orçamento ocupa um dia sozinho;
  *  - opcionalmente, a cada N dias de leitura entra um dia de revisão dos N dias anteriores.
  */
-export function planTrail(norms: PlanNorm[], minutesPerDay: number, wpm: number, reviewEvery = 0): PlannedDay[] {
+export const QUIZ_EVERY = 7; // um questionário a cada 7 dias de leitura ("semana" de leitura)
+
+export function planTrail(norms: PlanNorm[], minutesPerDay: number, wpm: number, reviewEvery = 0, weeklyQuiz = false): PlannedDay[] {
   const budget = Math.max(50, Math.round(minutesPerDay * wpm));
   const reading: PlannedDay[] = [];
   let cur: PlannedDay | null = null;
@@ -116,25 +120,33 @@ export function planTrail(norms: PlanNorm[], minutesPerDay: number, wpm: number,
 
   for (const d of merged) d.est_minutes = Math.max(1, Math.round(d.words / wpm));
 
-  if (!reviewEvery || reviewEvery < 2) return merged.slice(0, MAX_DAYS);
-
   const out: PlannedDay[] = [];
-  let since: number[] = [];
+  let sinceReview: number[] = [];
+  let sinceQuiz: number[] = [];
+  const review = reviewEvery >= 2 ? reviewEvery : 0;
   for (const d of merged) {
     out.push(d);
-    since.push(out.length); // número do dia (1-based)
-    if (since.length === reviewEvery) {
-      out.push({ kind: "revisao", segments: [], words: 0, articles: 0, est_minutes: Math.min(minutesPerDay, 30), review_of: since });
-      since = [];
+    sinceReview.push(out.length); // número do dia (1-based)
+    sinceQuiz.push(out.length);
+    if (review && sinceReview.length === review) {
+      out.push({ kind: "revisao", segments: [], words: 0, articles: 0, est_minutes: Math.min(minutesPerDay, 30), review_of: sinceReview });
+      sinceReview = [];
+    }
+    if (weeklyQuiz && sinceQuiz.length === QUIZ_EVERY) {
+      out.push({ kind: "questionario", segments: [], words: 0, articles: 0, est_minutes: 10, review_of: sinceQuiz });
+      sinceQuiz = [];
     }
   }
+  // questionário final com o que sobrou da última semana (se houver leitura suficiente)
+  if (weeklyQuiz && sinceQuiz.length >= 3) out.push({ kind: "questionario", segments: [], words: 0, articles: 0, est_minutes: 10, review_of: sinceQuiz });
   return out.slice(0, MAX_DAYS);
 }
 
 /** Estimativa rápida (para a prévia no formulário): total de dias a partir do total de palavras. */
-export function estimateDays(totalWords: number, minutesPerDay: number, wpm: number, reviewEvery = 0) {
+export function estimateDays(totalWords: number, minutesPerDay: number, wpm: number, reviewEvery = 0, weeklyQuiz = false) {
   const reading = Math.max(1, Math.ceil(totalWords / Math.max(50, minutesPerDay * wpm)));
-  return reading + (reviewEvery >= 2 ? Math.floor(reading / reviewEvery) : 0);
+  const quizzes = weeklyQuiz ? Math.floor(reading / QUIZ_EVERY) + (reading % QUIZ_EVERY >= 3 ? 1 : 0) : 0;
+  return reading + (reviewEvery >= 2 ? Math.floor(reading / reviewEvery) : 0) + quizzes;
 }
 
 /** "Arts. 1º a 45", ou o rótulo único quando o trecho tem um só artigo. */
