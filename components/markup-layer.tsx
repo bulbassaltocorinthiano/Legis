@@ -59,13 +59,23 @@ function locate(container: HTMLElement, h: Highlight): [number, number] | null {
   const i = text.indexOf(h.quote);
   return i >= 0 ? [i, i + h.quote.length] : null;
 }
+/** Em telas com mais de uma norma (ex.: dia de trilha), cada trecho fica dentro de [data-norm="id"]. */
+const normOfEl = (el: Element | null, fallback: number) => Number((el?.closest("[data-norm]") as HTMLElement | null)?.dataset.norm) || fallback;
+function containerFor(root: HTMLElement, anchor: string, normId: number, fallback: number) {
+  const scoped = root.querySelector("[data-norm]");
+  const a = CSS.escape(anchor);
+  if (!scoped) return root.querySelector<HTMLElement>(`[data-hl="${a}"]`);
+  return root.querySelector<HTMLElement>(`[data-norm="${normId || fallback}"] [data-hl="${a}"]`);
+}
+type Mark = Highlight & { norm_id?: number };
 interface Segment {
+  normId: number;
   anchor: string;
   start: number;
   end: number;
   quote: string;
 }
-function segmentsOf(range: Range): Segment[] {
+function segmentsOf(range: Range, fallbackNorm = 0): Segment[] {
   const root = lei();
   if (!root) return [];
   const out: Segment[] = [];
@@ -76,7 +86,7 @@ function segmentsOf(range: Range): Segment[] {
     let e = c.contains(range.endContainer) ? offsetIn(c, range.endContainer, range.endOffset) : text.length;
     while (s < e && /\s/.test(text[s])) s++;
     while (e > s && /\s/.test(text[e - 1])) e--;
-    if (e > s) out.push({ anchor: c.dataset.hl!, start: s, end: e, quote: text.slice(s, e) });
+    if (e > s) out.push({ normId: normOfEl(c, fallbackNorm), anchor: c.dataset.hl!, start: s, end: e, quote: text.slice(s, e) });
   }
   return out;
 }
@@ -93,8 +103,9 @@ function caretAt(x: number, y: number): { node: Node; offset: number } | null {
   return r ? { node: r.startContainer, offset: r.startOffset } : null;
 }
 /** Rótulo legível do dispositivo (ex.: "Art. 85, § 2º"). */
-function labelOf(anchor: string) {
-  const p = document.getElementById(anchor);
+function labelOf(anchor: string, normId?: number) {
+  const r = lei();
+  const p = (normId && r?.querySelector<HTMLElement>(`[data-norm="${normId}"] p[id="${CSS.escape(anchor)}"]`)) || document.getElementById(anchor);
   if (!p) return "";
   const own = p.querySelector(".rotulo")?.textContent?.replace(/\s*–\s*$/, "").trim() ?? "";
   if (p.classList.contains("artigo")) return own;
@@ -105,9 +116,9 @@ function labelOf(anchor: string) {
 }
 
 // ---------- componente ----------
-export function MarkupLayer({ normId, initial }: { normId: number; initial: Highlight[] }) {
+export function MarkupLayer({ normId, initial }: { normId: number; initial: Mark[] }) {
   const router = useRouter();
-  const [marks, setMarks] = useState<Highlight[]>(initial);
+  const [marks, setMarks] = useState<Mark[]>(initial);
   const marksRef = useRef(marks);
   marksRef.current = marks;
   const [tool, setTool] = useState<Tool>("off");
@@ -117,7 +128,8 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
   const colorRef = useRef(color);
   colorRef.current = color;
   const [bubble, setBubble] = useState<null | { x: number; y: number; below: boolean; text: string }>(null);
-  const [composer, setComposer] = useState<null | { anchor: string; quote: string | null; label: string }>(null);
+  const [composer, setComposer] = useState<null | { normId: number; anchor: string; quote: string | null; label: string }>(null);
+  const sameNorm = (m: Mark, n: number) => (m.norm_id ?? normId) === n;
   const [toast, setToast] = useState<string | null>(null);
   const [supported, setSupported] = useState(true);
   const tempId = useRef(-1);
@@ -148,7 +160,7 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
     if (!root) return;
     const groups = new Map<string, Range[]>(COLORS.map((c) => [c.id, []]));
     for (const h of marksRef.current) {
-      const c = root.querySelector<HTMLElement>(`[data-hl="${CSS.escape(h.anchor)}"]`);
+      const c = containerFor(root, h.anchor, h.norm_id ?? normId, normId);
       if (!c) continue;
       const pos = locate(c, h);
       if (!pos) continue;
@@ -184,14 +196,18 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
 
   const addFromRange = useCallback(
     async (range: Range, c: string) => {
-      const segs = segmentsOf(range).filter(
-        (s) => !marksRef.current.some((m) => m.anchor === s.anchor && m.color === c && m.start_off <= s.start && m.end_off >= s.end),
+      const segs = segmentsOf(range, normId).filter(
+        (s) => !marksRef.current.some((m) => sameNorm(m, s.normId) && m.anchor === s.anchor && m.color === c && m.start_off <= s.start && m.end_off >= s.end),
       );
       if (!segs.length) return;
-      const temps: Highlight[] = segs.map((s) => ({ id: tempId.current--, anchor: s.anchor, start_off: s.start, end_off: s.end, color: c, quote: s.quote }));
+      const temps: Mark[] = segs.map((s) => ({ id: tempId.current--, norm_id: s.normId, anchor: s.anchor, start_off: s.start, end_off: s.end, color: c, quote: s.quote }));
       setMarks((m) => [...m, ...temps]);
       try {
-        const saved = await addHighlights(normId, segs.map((s) => ({ ...s, color: c })));
+        const saved: Mark[] = [];
+        for (const n of [...new Set(segs.map((s) => s.normId))]) {
+          const part = segs.filter((s) => s.normId === n).map(({ anchor, start, end, quote }) => ({ anchor, start, end, quote, color: c }));
+          saved.push(...(await addHighlights(n, part)).map((h) => ({ ...h, norm_id: n })));
+        }
         const tempIds = new Set(temps.map((t) => t.id));
         setMarks((m) => [...m.filter((x) => !tempIds.has(x.id)), ...saved]);
       } catch (e) {
@@ -221,14 +237,14 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
 
   const eraseRange = useCallback(
     (range: Range) => {
-      const segs = segmentsOf(range);
+      const segs = segmentsOf(range, normId);
       const ids = marksRef.current
-        .filter((m) => segs.some((s) => s.anchor === m.anchor && m.start_off < s.end && m.end_off > s.start))
+        .filter((m) => segs.some((s) => sameNorm(m, s.normId) && s.anchor === m.anchor && m.start_off < s.end && m.end_off > s.start))
         .map((m) => m.id);
       removeMarks(ids);
       if (!ids.length) say("Nenhuma marcação nesse trecho.");
     },
-    [removeMarks, say],
+    [removeMarks, say, normId],
   );
 
   // eventos do texto
@@ -270,9 +286,10 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
         e.preventDefault();
         const off = offsetIn(c, pos.node, pos.offset);
         const text = c.textContent ?? "";
+        const n = normOfEl(c, normId);
         const ids = marksRef.current
           .filter((m) => {
-            if (m.anchor !== c.dataset.hl) return false;
+            if (m.anchor !== c.dataset.hl || (m.norm_id ?? normId) !== n) return false;
             const p = locate(c, m) ?? [m.start_off, m.end_off];
             return p[0] <= off && off <= p[1] && text.length > 0;
           })
@@ -283,7 +300,7 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
         const c = p?.querySelector<HTMLElement>("[data-hl]");
         if (!p || !c) return;
         e.preventDefault();
-        setComposer({ anchor: c.dataset.hl!, quote: null, label: labelOf(c.dataset.hl!) });
+        setComposer({ normId: normOfEl(c, normId), anchor: c.dataset.hl!, quote: null, label: labelOf(c.dataset.hl!, normOfEl(c, normId)) });
         setTool("off");
       }
     };
@@ -295,7 +312,7 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
       timer = setTimeout(() => {
         if (toolRef.current !== "off") return setBubble(null);
         const s = selectionInText();
-        if (!s || !segmentsOf(s.r).length) return setBubble(null);
+        if (!s || !segmentsOf(s.r, normId).length) return setBubble(null);
         const rect = s.r.getBoundingClientRect();
         const coarse = matchMedia("(pointer: coarse)").matches;
         const below = coarse || rect.top < 140;
@@ -327,7 +344,7 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
       document.removeEventListener("selectionchange", onSelChange);
       document.removeEventListener("keydown", onKey);
     };
-  }, [addFromRange, eraseRange, removeMarks]);
+  }, [addFromRange, eraseRange, removeMarks, normId]);
 
   const bubbleHighlight = (c: string) => {
     const sel = window.getSelection();
@@ -339,10 +356,10 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
   const bubbleNote = () => {
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) return;
-    const segs = segmentsOf(sel.getRangeAt(0));
+    const segs = segmentsOf(sel.getRangeAt(0), normId);
     if (!segs.length) return;
-    const quote = segs.map((s) => s.quote).join(" … ").slice(0, 600);
-    setComposer({ anchor: segs[0].anchor, quote, label: labelOf(segs[0].anchor) });
+    const quote = segs.filter((s) => s.normId === segs[0].normId).map((s) => s.quote).join(" … ").slice(0, 600);
+    setComposer({ normId: segs[0].normId, anchor: segs[0].anchor, quote, label: labelOf(segs[0].anchor, segs[0].normId) });
     sel.removeAllRanges();
     setBubble(null);
   };
@@ -364,8 +381,8 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
     if (!bubble) return false;
     const sel = typeof window !== "undefined" ? window.getSelection() : null;
     if (!sel || !sel.rangeCount) return false;
-    const segs = segmentsOf(sel.getRangeAt(0));
-    return marks.some((m) => segs.some((s) => s.anchor === m.anchor && m.start_off < s.end && m.end_off > s.start));
+    const segs = segmentsOf(sel.getRangeAt(0), normId);
+    return marks.some((m) => segs.some((s) => sameNorm(m, s.normId) && s.anchor === m.anchor && m.start_off < s.end && m.end_off > s.start));
   })();
 
   const hint =
@@ -458,7 +475,7 @@ export function MarkupLayer({ normId, initial }: { normId: number; initial: High
 
       {composer && (
         <NoteComposer
-          normId={normId}
+          normId={composer.normId}
           target={composer}
           onClose={() => setComposer(null)}
           onSaved={() => {
