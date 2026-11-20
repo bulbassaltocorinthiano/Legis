@@ -71,6 +71,18 @@ export async function ingestNorm(n: NormRow, opts: { force?: boolean; log?: (s: 
     return "unsupported";
   }
 
+  // Norma que já tem texto gravado nunca sai do ar por uma falha passageira da fonte:
+  // mantém a última versão obtida e tenta de novo na próxima rodada.
+  const hasText = !!n.content_hash;
+  const keepLastText = async (why: string): Promise<IngestOutcome> => {
+    await db.query(`UPDATE norms SET status='ok', status_detail=$2, checked_at=now() WHERE id=$1`, [
+      n.id,
+      `Última conferência falhou (${why.slice(0, 300)}); exibindo a última versão obtida.`,
+    ]);
+    log(`  ! ${n.key}: falha na conferência, mantida a última versão (${why})`);
+    return "error";
+  };
+
   try {
     let html: string | null = null;
     let url = n.source_url;
@@ -82,7 +94,14 @@ export async function ingestNorm(n: NormRow, opts: { force?: boolean; log?: (s: 
         ? await fetchRaw(url)
         : await fetchRaw(url, { etag: n.source_etag, lastModified: n.source_last_modified });
       if (r.status === 304) {
-        await db.query(`UPDATE norms SET checked_at=now() WHERE id=$1`, [n.id]);
+        // 304 = o texto gravado continua sendo o vigente; reabre a norma se uma falha anterior a tinha fechado.
+        await db.query(
+          `UPDATE norms SET checked_at=now(),
+             status=CASE WHEN content_hash IS NOT NULL THEN 'ok' ELSE status END,
+             status_detail=CASE WHEN content_hash IS NOT NULL THEN NULL ELSE status_detail END
+           WHERE id=$1`,
+          [n.id],
+        );
         return "not_modified";
       }
       if (r.status === 200) {
@@ -96,6 +115,7 @@ export async function ingestNorm(n: NormRow, opts: { force?: boolean; log?: (s: 
     if (!html) {
       const res = await resolvePlanalto(asCatalog(n));
       if (!res) {
+        if (hasText) return keepLastText("Planalto não respondeu com a página da norma");
         await db.query(`UPDATE norms SET status='not_found', status_detail=$2, checked_at=now() WHERE id=$1`, [
           n.id,
           "Endereço no Planalto não localizado automaticamente.",
@@ -120,6 +140,7 @@ export async function ingestNorm(n: NormRow, opts: { force?: boolean; log?: (s: 
       }
     }
     if (parsed.articleCount === 0) {
+      if (hasText) return keepLastText("página do Planalto veio sem artigos reconhecíveis");
       await db.query(`UPDATE norms SET status='error', status_detail=$2, checked_at=now(), source_url=$3 WHERE id=$1`, [
         n.id,
         "Página encontrada, mas nenhum artigo foi reconhecido.",
@@ -155,6 +176,7 @@ export async function ingestNorm(n: NormRow, opts: { force?: boolean; log?: (s: 
     return changed ? (n.content_hash ? "changed" : "created") : "unchanged";
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    if (hasText) return keepLastText(msg);
     await db.query(`UPDATE norms SET status='error', status_detail=$2, checked_at=now() WHERE id=$1`, [n.id, msg.slice(0, 500)]);
     log(`  ✗ ${n.key}: ${msg}`);
     return "error";
