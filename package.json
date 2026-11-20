@@ -13,7 +13,7 @@
     "ingest:stj": "tsx scripts/ingest-stj.ts",
     "seed": "tsx scripts/seed.ts",
     "user:create": "tsx scripts/create-user.ts",
-    "test": "tsx --test lib/text/prazos.test.ts lib/ingest/citations.test.ts lib/trilhas/plan.test.ts"
+    "test": "tsx --test lib/text/prazos.test.ts lib/ingest/citations.test.ts lib/cobrados/cobrados.test.ts lib/trilhas/plan.test.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.16",

@@ -8,6 +8,7 @@ export interface Prefs {
   hideTerms?: boolean;
   hideNotes?: boolean;
   hideRevoked?: boolean;
+  hideCobrados?: boolean;
 }
 
 const KEY = "legis:prefs";

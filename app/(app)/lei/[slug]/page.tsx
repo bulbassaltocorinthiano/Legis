@@ -13,6 +13,7 @@ import { Toc, type TocItem } from "@/components/toc";
 import { JurisList } from "@/components/juris-list";
 import { formatDateTime } from "@/lib/format";
 import { TrackVisit } from "@/components/recent-reads";
+import { cobradoTitle, getCobrados, type SourceId } from "@/lib/cobrados";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,7 @@ export default async function LeiPage({
   const jurisMap = juris ? await getJurisForNorm(norm.id) : new Map<string, Juris[]>();
   const totalJuris = [...counts.values()].reduce((a, b) => a + b, 0);
   const matcher = buildMatcher(terms, cats.map((c) => c.id));
+  const cobrados = getCobrados(norm.key);
 
   const toc: TocItem[] = nodes
     .filter((n) => STRUCT.has(n.kind))
@@ -136,7 +138,7 @@ export default async function LeiPage({
               <article id="lei" className="lei mt-6 max-w-[72ch]">
                 {nodes.map((n, i) => {
                   if (n.kind === "artigo") seen = new Set();
-                  const nodeEl = <NodeView n={n} matcher={matcher} seen={seen} jurisCount={n.kind === "artigo" && n.article_key ? (counts.get(n.article_key) ?? 0) : 0} slug={norm.slug} juris={juris} />;
+                  const nodeEl = <NodeView n={n} matcher={matcher} seen={seen} jurisCount={n.kind === "artigo" && n.article_key ? (counts.get(n.article_key) ?? 0) : 0} slug={norm.slug} juris={juris} cobrado={n.kind === "artigo" && n.article_key ? cobrados.get(n.article_key) : undefined} />;
                   const myNotes = notesBy.get(n.anchor);
                   const el = (
                     <Fragment key={n.id}>
@@ -170,6 +172,19 @@ export default async function LeiPage({
             <p>
               <span className="underline decoration-dotted decoration-accent/60 underline-offset-4">termo</span> — clique para ver o conceito
             </p>
+            <p className="flex items-start gap-1.5">
+              <span className="cobrado-marca" aria-hidden>
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5Z" />
+                </svg>
+              </span>
+              <span>
+                artigo frequente em provas ·{" "}
+                <Link href="/cobrados" className="underline underline-offset-2 hover:text-ink">
+                  fontes
+                </Link>
+              </span>
+            </p>
             <p>Selecione qualquer palavra para consultá-la na biblioteca doutrinária.</p>
           </div>
         </aside>
@@ -191,6 +206,7 @@ function NodeView({
   jurisCount,
   slug,
   juris,
+  cobrado,
 }: {
   n: NodeRow;
   matcher: ReturnType<typeof buildMatcher>;
@@ -198,6 +214,7 @@ function NodeView({
   jurisCount: number;
   slug: string;
   juris: boolean;
+  cobrado?: SourceId[];
 }) {
   const notes = n.notes?.length ? (
     <>
@@ -236,13 +253,20 @@ function NodeView({
   }
 
   const indent = n.kind === "artigo" ? 0 : Math.min(n.level, 4);
-  const cls = ["dispositivo", n.kind, n.revoked ? "revogado" : "", n.kind === "pena" ? "pena" : ""].join(" ");
+  const cls = ["dispositivo", n.kind, n.revoked ? "revogado" : "", n.kind === "pena" ? "pena" : "", cobrado ? "cobrado" : ""].join(" ");
   return (
     <p id={n.anchor} className={cls} style={indent ? { paddingLeft: `${indent * 1.25}rem` } : undefined}>
       {n.label && (
         <a href={`#${n.anchor}`} className="rotulo hover:text-accent">
           {n.kind === "pena" ? "Pena –" : n.kind === "inciso" ? `${n.label} –` : n.label}
         </a>
+      )}
+      {cobrado && (
+        <Link href={`/cobrados#${slug}`} className="cobrado-marca no-print" title={cobradoTitle(cobrado)} aria-label={cobradoTitle(cobrado)}>
+          <svg viewBox="0 0 24 24" aria-hidden>
+            <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5Z" />
+          </svg>
+        </Link>
       )}{" "}
       {n.revoked && !n.text ? (
         <span className="italic">(revogado)</span>
