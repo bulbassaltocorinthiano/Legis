@@ -5,6 +5,7 @@ import { formatDateTime, relativeTime } from "@/lib/format";
 import { AreaIcon, areaColor } from "@/components/area-visual";
 import { PomodoroCard } from "@/components/pomodoro";
 import { RecentReads } from "@/components/recent-reads";
+import { TrailHomeCard } from "@/components/trilhas/home-card";
 
 export const dynamic = "force-dynamic";
 
@@ -161,6 +162,7 @@ export default async function Home() {
         </div>
 
         <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
+          <TrailHomeCard />
           <PomodoroCard />
 
           <div className="rounded-3xl border border-line bg-surface p-5">
