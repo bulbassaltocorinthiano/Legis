@@ -140,7 +140,10 @@ function CelebrationModal({ cel, trailId, onClose }: { cel: Celebration; trailId
 export function Bar({ pct, animate = false, className = "" }: { pct: number; animate?: boolean; className?: string }) {
   const [w, setW] = useState(animate ? 0 : pct);
   useEffect(() => {
-    if (!animate) return setW(pct);
+    if (!animate) {
+      setW(pct);
+      return;
+    }
     const t = setTimeout(() => setW(pct), 120);
     return () => clearTimeout(t);
   }, [pct, animate]);
