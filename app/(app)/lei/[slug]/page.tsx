@@ -13,6 +13,7 @@ import { Toc, type TocItem } from "@/components/toc";
 import { JurisList } from "@/components/juris-list";
 import { formatDateTime } from "@/lib/format";
 import { TrackVisit } from "@/components/recent-reads";
+import { ReadingTracker } from "@/components/reading-tracker";
 import { cobradoTitle, getCobrados, type SourceId } from "@/lib/cobrados";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,7 @@ export default async function LeiPage({
     <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
       <GlossaryLayer />
       <TrackVisit slug={norm.slug} title={norm.nickname ?? norm.description} subtitle={norm.title} />
+      {norm.status === "ok" && <ReadingTracker normId={norm.id} />}
       <div className="leitor-grid grid gap-8 xl:gap-12">
         <Toc items={toc} />
 

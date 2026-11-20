@@ -39,15 +39,18 @@ export function UserMenu({ name, isAdmin }: { name: string; isAdmin: boolean }) 
           <p className="px-3 pt-2 pb-3 text-muted truncate">{name}</p>
           <div className="md:hidden border-t border-line pt-1 mt-1">
             <MenuLink href="/" onClick={() => setOpen(false)}>Legislação</MenuLink>
+            <MenuLink href="/trilhas" onClick={() => setOpen(false)}>Trilhas de leitura</MenuLink>
             <MenuLink href="/doutrina" onClick={() => setOpen(false)}>Doutrina</MenuLink>
           </div>
           <div className="border-t border-line pt-1 mt-1">
             <MenuLink href="/notas" onClick={() => setOpen(false)}>Minhas notas e marcações</MenuLink>
+            <MenuLink href="/estatisticas" onClick={() => setOpen(false)}>Estatísticas de leitura</MenuLink>
           </div>
           {isAdmin && (
             <div className="border-t border-line pt-1 mt-1">
               <MenuLink href="/admin/cobertura" onClick={() => setOpen(false)}>Cobertura e atualizações</MenuLink>
               <MenuLink href="/admin/usuarios" onClick={() => setOpen(false)}>Usuários</MenuLink>
+              <MenuLink href="/admin/ranking" onClick={() => setOpen(false)}>Ranking de leitura</MenuLink>
               <MenuLink href="/admin/doutrina" onClick={() => setOpen(false)}>Editar doutrina</MenuLink>
             </div>
           )}
