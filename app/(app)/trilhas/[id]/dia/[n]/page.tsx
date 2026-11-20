@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getNormCategories, getTerms } from "@/lib/data";
+import { getNormCategories, getTerms, getUserHighlights, getUserNotes } from "@/lib/data";
 import { buildMatcher } from "@/lib/text/terms";
 import { getDayContent, getQuizAttempts, getQuizQuestions, getTrail, getTrailDays } from "@/lib/trilhas";
 import { FRASES_INICIO, pick } from "@/lib/trilhas/frases";
@@ -13,6 +13,7 @@ import { ReadingProgress } from "@/components/trilhas/reading-progress";
 import { Bar, CompleteDay } from "@/components/trilhas/celebration";
 import { Quiz } from "@/components/trilhas/quiz";
 import { ReadingTracker } from "@/components/reading-tracker";
+import { MarkupLayer } from "@/components/markup-layer";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Leitura do dia" };
@@ -34,9 +35,17 @@ export default async function DiaPage({ params }: { params: Promise<{ id: string
   const quiz = day.kind === "questionario";
   const special = review || quiz;
 
-  const [parts, terms, cats] = special
-    ? [[], [], []]
-    : await Promise.all([getDayContent(day), getTerms(), Promise.all([...new Set(day.segments.map((s) => s.norm_id))].map(getNormCategories))]);
+  const normIds = special ? [] : [...new Set(day.segments.map((s) => s.norm_id))];
+  const [parts, terms, cats, marks, notes] = special
+    ? [[], [], [], [], []]
+    : await Promise.all([
+        getDayContent(day),
+        getTerms(),
+        Promise.all(normIds.map(getNormCategories)),
+        Promise.all(normIds.map(async (nid) => (await getUserHighlights(me.id, nid)).map((h) => ({ ...h, norm_id: nid })))),
+        Promise.all(normIds.map(async (nid) => ({ nid, list: await getUserNotes(me.id, nid) }))),
+      ]);
+  const notesOf = (nid: number) => notes.find((x) => x.nid === nid)?.list ?? [];
   const matcher = buildMatcher(terms, cats.flat().map((c) => c.id));
   const reviewed = review ? days.filter((d) => day.review_of.includes(d.day_no)) : [];
   const questions = quiz ? (await getQuizQuestions(day, days)).map(({ answer: _a, ...rest }) => rest) : [];
@@ -107,13 +116,13 @@ export default async function DiaPage({ params }: { params: Promise<{ id: string
         <>
           <div className="sticky top-16 z-20 -mx-4 sm:mx-0 mt-6 bg-bg/90 backdrop-blur-md border-b border-line px-4 sm:px-0">
             <div className="flex items-center gap-2 py-2 min-w-0">
-              <span className="text-xs text-muted truncate">Toque num rótulo para abrir o dispositivo na lei completa (marca-texto e notas).</span>
+              <span className="text-xs text-muted truncate">Selecione um trecho para grifar ou anotar. Fica salvo também na lei completa e em Notas.</span>
               <ReaderControls />
             </div>
           </div>
           <article id="lei" className="lei mt-6 max-w-[72ch]">
             {parts.map(({ segment, nodes }, i) => (
-              <section key={i} id={`seg-${i}`} className={i > 0 ? "mt-12" : ""}>
+              <section key={i} id={`seg-${i}`} data-norm={segment.norm_id} className={i > 0 ? "mt-12" : ""}>
                 <ReadingTracker normId={segment.norm_id} scopeId={`seg-${i}`} trackTime={i === 0} />
                 {parts.length > 1 && (
                   <p className="font-sans text-xs font-semibold uppercase tracking-wider text-accent mb-2">
@@ -121,7 +130,7 @@ export default async function DiaPage({ params }: { params: Promise<{ id: string
                   </p>
                 )}
                 {nodes.length ? (
-                  <DayText nodes={nodes} matcher={matcher} slug={segment.slug ?? ""} />
+                  <DayText nodes={nodes} matcher={matcher} slug={segment.slug ?? ""} normId={segment.norm_id} notes={notesOf(segment.norm_id)} />
                 ) : (
                   <p className="font-sans text-sm text-muted">
                     Este trecho não foi encontrado no texto atual da norma (a lei pode ter sido alterada).{" "}
@@ -131,6 +140,7 @@ export default async function DiaPage({ params }: { params: Promise<{ id: string
               </section>
             ))}
           </article>
+          {normIds.length > 0 && <MarkupLayer normId={normIds[0]} initial={marks.flat()} />}
         </>
       )}
 

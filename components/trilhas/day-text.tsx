@@ -1,12 +1,16 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { LawText } from "@/components/law-text";
-import type { NodeRow } from "@/lib/data";
+import { NoteCards } from "@/components/note-cards";
+import type { NodeRow, Note } from "@/lib/data";
 import type { buildMatcher } from "@/lib/text/terms";
 
 const STRUCT = new Set(["parte", "livro", "titulo", "subtitulo", "capitulo", "secao", "subsecao"]);
 
-/** Texto do trecho do dia (mesmo visual do leitor da lei, sem as camadas de edição). */
-export function DayText({ nodes, matcher, slug }: { nodes: NodeRow[]; matcher: ReturnType<typeof buildMatcher>; slug: string }) {
+/** Texto do trecho do dia, com o mesmo visual e as mesmas âncoras de grifo/nota do leitor da lei. */
+export function DayText({ nodes, matcher, slug, normId, notes: mine = [] }: { nodes: NodeRow[]; matcher: ReturnType<typeof buildMatcher>; slug: string; normId: number; notes?: Note[] }) {
+  const notesBy = new Map<string, Note[]>();
+  for (const nt of mine) notesBy.set(nt.anchor, [...(notesBy.get(nt.anchor) ?? []), nt]);
   let seen = new Set<string>();
   return (
     <>
@@ -34,16 +38,26 @@ export function DayText({ nodes, matcher, slug }: { nodes: NodeRow[]; matcher: R
         if (["epigrafe", "ementa", "preambulo", "fecho"].includes(n.kind)) return null;
         const indent = n.kind === "artigo" ? 0 : Math.min(n.level, 4);
         const cls = ["dispositivo", n.kind, n.revoked ? "revogado" : "", n.kind === "pena" ? "pena" : ""].join(" ");
+        const myNotes = notesBy.get(n.anchor);
         return (
-          <p key={n.id} id={n.anchor} className={cls} style={indent ? { paddingLeft: `${indent * 1.25}rem` } : undefined}>
-            {n.label && (
-              <Link href={`/lei/${slug}#${n.anchor}`} className="rotulo hover:text-accent" title="Abrir na lei completa">
-                {n.kind === "pena" ? "Pena –" : n.kind === "inciso" ? `${n.label} –` : n.label}
-              </Link>
-            )}{" "}
-            {n.revoked && !n.text ? <span className="italic">(revogado)</span> : <LawText text={n.text} matcher={matcher} seen={seen} />}
-            {notes}
-          </p>
+          <Fragment key={n.id}>
+            <p id={n.anchor} className={cls} style={indent ? { paddingLeft: `${indent * 1.25}rem` } : undefined}>
+              {n.label && (
+                <Link href={`/lei/${slug}#${n.anchor}`} className="rotulo hover:text-accent" title="Abrir na lei completa">
+                  {n.kind === "pena" ? "Pena –" : n.kind === "inciso" ? `${n.label} –` : n.label}
+                </Link>
+              )}{" "}
+              {n.revoked && !n.text ? (
+                <span className="italic">(revogado)</span>
+              ) : (
+                <span data-hl={n.anchor}>
+                  <LawText text={n.text} matcher={matcher} seen={seen} />
+                </span>
+              )}
+              {notes}
+            </p>
+            {myNotes && <NoteCards normId={normId} notes={myNotes} />}
+          </Fragment>
         );
       })}
     </>
